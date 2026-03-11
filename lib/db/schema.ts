@@ -1,170 +1,153 @@
-import type { InferSelectModel } from "drizzle-orm";
+import { sql } from 'drizzle-orm';
 import {
   boolean,
-  foreignKey,
-  json,
+  integer,
   pgTable,
-  primaryKey,
+  serial,
   text,
   timestamp,
-  uuid,
   varchar,
-} from "drizzle-orm/pg-core";
+} from 'drizzle-orm/pg-core';
 
-export const user = pgTable("User", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  email: varchar("email", { length: 64 }).notNull(),
-  password: varchar("password", { length: 64 }),
+// User table (required by auth)
+export const user = pgTable('user', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  email: varchar('email', { length: 255 }).notNull().unique(),
+  password: varchar('password', { length: 255 }),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
-export type User = InferSelectModel<typeof user>;
+export type User = typeof user.$inferSelect;
 
-export const chat = pgTable("Chat", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  createdAt: timestamp("createdAt").notNull(),
-  title: text("title").notNull(),
-  userId: uuid("userId")
-    .notNull()
-    .references(() => user.id),
-  visibility: varchar("visibility", { enum: ["public", "private"] })
-    .notNull()
-    .default("private"),
+// Chat table
+export const chat = pgTable('chat', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => user.id),
+  title: varchar('title', { length: 255 }).notNull(),
+  visibility: varchar('visibility', { length: 20 }).notNull().default('private'),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
-export type Chat = InferSelectModel<typeof chat>;
+export type Chat = typeof chat.$inferSelect;
 
-// DEPRECATED: The following schema is deprecated and will be removed in the future.
-// Read the migration guide at https://chatbot.dev/docs/migration-guides/message-parts
-export const messageDeprecated = pgTable("Message", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  chatId: uuid("chatId")
-    .notNull()
-    .references(() => chat.id),
-  role: varchar("role").notNull(),
-  content: json("content").notNull(),
-  createdAt: timestamp("createdAt").notNull(),
+// Message table
+export const message = pgTable('message', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  chatId: varchar('chat_id', { length: 255 }).notNull().references(() => chat.id),
+  role: varchar('role', { length: 20 }).notNull(),
+  parts: text('parts').notNull(),
+  attachments: text('attachments').notNull().default('[]'),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
-export type MessageDeprecated = InferSelectModel<typeof messageDeprecated>;
+export type DBMessage = typeof message.$inferSelect;
 
-export const message = pgTable("Message_v2", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  chatId: uuid("chatId")
-    .notNull()
-    .references(() => chat.id),
-  role: varchar("role").notNull(),
-  parts: json("parts").notNull(),
-  attachments: json("attachments").notNull(),
-  createdAt: timestamp("createdAt").notNull(),
+// Document table
+export const document = pgTable('document', {
+  id: varchar('id', { length: 255 }).notNull(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => user.id),
+  title: varchar('title', { length: 255 }).notNull(),
+  kind: varchar('kind', { length: 20 }).notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
-export type DBMessage = InferSelectModel<typeof message>;
+// Suggestion table
+export const suggestion = pgTable('suggestion', {
+  id: serial('id').primaryKey(),
+  documentId: varchar('document_id', { length: 255 }).notNull(),
+  documentCreatedAt: timestamp('document_created_at').notNull(),
+  originalText: text('original_text').notNull(),
+  suggestedText: text('suggested_text').notNull(),
+  description: text('description'),
+  isResolved: boolean('is_resolved').notNull().default(false),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => user.id),
+  createdAt: timestamp('created_at').defaultNow(),
+});
 
-// DEPRECATED: The following schema is deprecated and will be removed in the future.
-// Read the migration guide at https://chatbot.dev/docs/migration-guides/message-parts
-export const voteDeprecated = pgTable(
-  "Vote",
-  {
-    chatId: uuid("chatId")
-      .notNull()
-      .references(() => chat.id),
-    messageId: uuid("messageId")
-      .notNull()
-      .references(() => messageDeprecated.id),
-    isUpvoted: boolean("isUpvoted").notNull(),
-  },
-  (table) => {
-    return {
-      pk: primaryKey({ columns: [table.chatId, table.messageId] }),
-    };
-  }
-);
+export type Suggestion = typeof suggestion.$inferSelect;
 
-export type VoteDeprecated = InferSelectModel<typeof voteDeprecated>;
+// Stream table
+export const stream = pgTable('stream', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  chatId: varchar('chat_id', { length: 255 }).notNull().references(() => chat.id),
+  createdAt: timestamp('created_at').defaultNow(),
+});
 
-export const vote = pgTable(
-  "Vote_v2",
-  {
-    chatId: uuid("chatId")
-      .notNull()
-      .references(() => chat.id),
-    messageId: uuid("messageId")
-      .notNull()
-      .references(() => message.id),
-    isUpvoted: boolean("isUpvoted").notNull(),
-  },
-  (table) => {
-    return {
-      pk: primaryKey({ columns: [table.chatId, table.messageId] }),
-    };
-  }
-);
+// Vote table
+export const vote = pgTable('vote', {
+  chatId: varchar('chat_id', { length: 255 }).notNull().references(() => chat.id),
+  messageId: varchar('message_id', { length: 255 }).notNull(),
+  isUpvoted: boolean('is_upvoted').notNull(),
+});
 
-export type Vote = InferSelectModel<typeof vote>;
+// ===== Vehicle Management Tables =====
 
-export const document = pgTable(
-  "Document",
-  {
-    id: uuid("id").notNull().defaultRandom(),
-    createdAt: timestamp("createdAt").notNull(),
-    title: text("title").notNull(),
-    content: text("content"),
-    kind: varchar("text", { enum: ["text", "code", "image", "sheet"] })
-      .notNull()
-      .default("text"),
-    userId: uuid("userId")
-      .notNull()
-      .references(() => user.id),
-  },
-  (table) => {
-    return {
-      pk: primaryKey({ columns: [table.id, table.createdAt] }),
-    };
-  }
-);
+// 车辆表
+export const vehicles = pgTable('vehicles', {
+  id: serial('id').primaryKey(),
+  vehicleId: varchar('vehicle_id', { length: 50 }).notNull().unique(),
+  type: varchar('type', { length: 20 }).notNull(), // sedan, suv, van, truck
+  brand: varchar('brand', { length: 50 }).notNull(),
+  model: varchar('model', { length: 50 }).notNull(),
+  licensePlate: varchar('license_plate', { length: 20 }).notNull().unique(),
+  capacity: integer('capacity').notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('available'), // available, booked, maintenance, unavailable
+  location: varchar('location', { length: 100 }).notNull(),
+  lastMaintenance: timestamp('last_maintenance'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
 
-export type Document = InferSelectModel<typeof document>;
+// 预订表
+export const bookings = pgTable('bookings', {
+  id: serial('id').primaryKey(),
+  bookingId: varchar('booking_id', { length: 50 }).notNull().unique(),
+  userId: varchar('user_id', { length: 50 }).notNull(),
+  userName: varchar('user_name', { length: 100 }).notNull(),
+  vehicleId: integer('vehicle_id').references(() => vehicles.id),
+  pickupTime: timestamp('pickup_time').notNull(),
+  returnTime: timestamp('return_time').notNull(),
+  pickupLocation: varchar('pickup_location', { length: 100 }).notNull(),
+  destination: varchar('destination', { length: 100 }).notNull(),
+  purpose: varchar('purpose', { length: 200 }),
+  status: varchar('status', { length: 20 }).notNull().default('pending'), // pending, confirmed, completed, cancelled
+  estimatedCost: integer('estimated_cost'),
+  actualCost: integer('actual_cost'),
+  driverAssigned: boolean('driver_assigned').default(false),
+  driverName: varchar('driver_name', { length: 100 }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
 
-export const suggestion = pgTable(
-  "Suggestion",
-  {
-    id: uuid("id").notNull().defaultRandom(),
-    documentId: uuid("documentId").notNull(),
-    documentCreatedAt: timestamp("documentCreatedAt").notNull(),
-    originalText: text("originalText").notNull(),
-    suggestedText: text("suggestedText").notNull(),
-    description: text("description"),
-    isResolved: boolean("isResolved").notNull().default(false),
-    userId: uuid("userId")
-      .notNull()
-      .references(() => user.id),
-    createdAt: timestamp("createdAt").notNull(),
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.id] }),
-    documentRef: foreignKey({
-      columns: [table.documentId, table.documentCreatedAt],
-      foreignColumns: [document.id, document.createdAt],
-    }),
-  })
-);
+// 司机表
+export const drivers = pgTable('drivers', {
+  id: serial('id').primaryKey(),
+  driverId: varchar('driver_id', { length: 50 }).notNull().unique(),
+  name: varchar('name', { length: 100 }).notNull(),
+  phone: varchar('phone', { length: 20 }).notNull(),
+  licenseNumber: varchar('license_number', { length: 50 }).notNull().unique(),
+  status: varchar('status', { length: 20 }).notNull().default('available'), // available, assigned, off-duty
+  rating: integer('rating').default(5),
+  totalTrips: integer('total_trips').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
 
-export type Suggestion = InferSelectModel<typeof suggestion>;
-
-export const stream = pgTable(
-  "Stream",
-  {
-    id: uuid("id").notNull().defaultRandom(),
-    chatId: uuid("chatId").notNull(),
-    createdAt: timestamp("createdAt").notNull(),
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.id] }),
-    chatRef: foreignKey({
-      columns: [table.chatId],
-      foreignColumns: [chat.id],
-    }),
-  })
-);
-
-export type Stream = InferSelectModel<typeof stream>;
+// 费用表
+export const costs = pgTable('costs', {
+  id: serial('id').primaryKey(),
+  costId: varchar('cost_id', { length: 50 }).notNull().unique(),
+  bookingId: varchar('booking_id', { length: 50 }).notNull(),
+  baseFee: integer('base_fee').notNull(),
+  distanceFee: integer('distance_fee').notNull(),
+  timeFee: integer('time_fee').notNull(),
+  tollFee: integer('toll_fee').default(0),
+  parkingFee: integer('parking_fee').default(0),
+  otherFees: integer('other_fees').default(0),
+  totalAmount: integer('total_amount').notNull(),
+  currency: varchar('currency', { length: 10 }).notNull().default('CNY'),
+  paid: boolean('paid').default(false),
+  paymentMethod: varchar('payment_method', { length: 20 }),
+  createdAt: timestamp('created_at').defaultNow(),
+});
