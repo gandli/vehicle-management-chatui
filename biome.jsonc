@@ -36,10 +36,6 @@
         "noNestedTernary": "off",
         "useConsistentTypeDefinitions": "off"
       },
-      "nursery": {
-        "noUnnecessaryConditions": "off",
-        "useSortedClasses": "off"
-      },
       "complexity": {
         "noExcessiveCognitiveComplexity": "off",
         "useSimplifiedLogicExpression": "off"
